@@ -1,0 +1,5 @@
+# what a run writes: the generated SQL, the load's logs, the report and exports
+out/
+logs/
+report.md
+*.json

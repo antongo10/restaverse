@@ -1,0 +1,298 @@
+{
+  "status": "PASSED",
+  "generatedAt": "2026-10-25T12:47:00.197075+01:00",
+  "databaseName": "hospitality_street_sim",
+  "dateRange": {
+    "start": "2026-10-01",
+    "end": "2026-10-31",
+    "daysCount": 31,
+    "liveStartDate": "2026-10-25"
+  },
+  "totalDaysInDataset": 31,
+  "totalAnnualOrders": 3038,
+  "totalAnnualRevenueCents": 25133600,
+  "causalInvariants": {
+    "earlyCustomerDeparturesBeforeFoodConsumed": 0,
+    "cucumber150to120to90ContentionEvents": 1187,
+    "totalContentionEvents": 27884,
+    "maxSimultaneousBottlesHeldByBarman": 1
+  },
+  "collectionCounts": {
+    "streets": 1,
+    "businesses": 3,
+    "premises": 3,
+    "floorPlans": 3,
+    "sceneObjects": 96,
+    "agentDefinitions": 22,
+    "employees": 22,
+    "suppliers": 8,
+    "ingredients": 38,
+    "products": 31,
+    "payrollRecords": 130,
+    "expenses": 101,
+    "productionBatches": 0,
+    "customers": 600,
+    "shifts": 682,
+    "reservations": 3038,
+    "orders": 3038,
+    "payments": 3038,
+    "inventoryMovements": 40092,
+    "stockUnits": 10161,
+    "dishInstances": 12267,
+    "contentionLog": 27884,
+    "simulationSessions": 1,
+    "simulationEvents": 218295,
+    "simulationSnapshots": 0,
+    "dailySummaries": 31
+  },
+  "reconciliationByBenchmarkDate": {
+    "2026-10-01": {
+      "orderCount": 86,
+      "orderPaidCents": 760428,
+      "paymentsSumCents": 760428,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6124
+    },
+    "2026-10-02": {
+      "orderCount": 112,
+      "orderPaidCents": 999864,
+      "paymentsSumCents": 999864,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8065
+    },
+    "2026-10-03": {
+      "orderCount": 112,
+      "orderPaidCents": 1012392,
+      "paymentsSumCents": 1012392,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8132
+    },
+    "2026-10-04": {
+      "orderCount": 112,
+      "orderPaidCents": 1017144,
+      "paymentsSumCents": 1017144,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8165
+    },
+    "2026-10-05": {
+      "orderCount": 86,
+      "orderPaidCents": 763290,
+      "paymentsSumCents": 763290,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6133
+    },
+    "2026-10-06": {
+      "orderCount": 86,
+      "orderPaidCents": 770310,
+      "paymentsSumCents": 770310,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6176
+    },
+    "2026-10-07": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6147
+    },
+    "2026-10-08": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6153
+    },
+    "2026-10-09": {
+      "orderCount": 112,
+      "orderPaidCents": 1004994,
+      "paymentsSumCents": 1004994,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8084
+    },
+    "2026-10-10": {
+      "orderCount": 112,
+      "orderPaidCents": 1007856,
+      "paymentsSumCents": 1007856,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8092
+    },
+    "2026-10-11": {
+      "orderCount": 112,
+      "orderPaidCents": 1002348,
+      "paymentsSumCents": 1002348,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8081
+    },
+    "2026-10-12": {
+      "orderCount": 86,
+      "orderPaidCents": 762696,
+      "paymentsSumCents": 762696,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6124
+    },
+    "2026-10-13": {
+      "orderCount": 86,
+      "orderPaidCents": 763290,
+      "paymentsSumCents": 763290,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6121
+    },
+    "2026-10-14": {
+      "orderCount": 86,
+      "orderPaidCents": 765180,
+      "paymentsSumCents": 765180,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6151
+    },
+    "2026-10-15": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6149
+    },
+    "2026-10-16": {
+      "orderCount": 112,
+      "orderPaidCents": 1004994,
+      "paymentsSumCents": 1004994,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8093
+    },
+    "2026-10-17": {
+      "orderCount": 112,
+      "orderPaidCents": 1007478,
+      "paymentsSumCents": 1007478,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8105
+    },
+    "2026-10-18": {
+      "orderCount": 112,
+      "orderPaidCents": 1001970,
+      "paymentsSumCents": 1001970,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8086
+    },
+    "2026-10-19": {
+      "orderCount": 86,
+      "orderPaidCents": 765180,
+      "paymentsSumCents": 765180,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6149
+    },
+    "2026-10-20": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6143
+    },
+    "2026-10-21": {
+      "orderCount": 86,
+      "orderPaidCents": 765180,
+      "paymentsSumCents": 765180,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6159
+    },
+    "2026-10-22": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6151
+    },
+    "2026-10-23": {
+      "orderCount": 112,
+      "orderPaidCents": 997002,
+      "paymentsSumCents": 997002,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8056
+    },
+    "2026-10-24": {
+      "orderCount": 120,
+      "orderPaidCents": 1091232,
+      "paymentsSumCents": 1091232,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8751
+    },
+    "2026-10-25": {
+      "orderCount": 112,
+      "orderPaidCents": 997380,
+      "paymentsSumCents": 997380,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8042
+    },
+    "2026-10-26": {
+      "orderCount": 86,
+      "orderPaidCents": 763290,
+      "paymentsSumCents": 763290,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6133
+    },
+    "2026-10-27": {
+      "orderCount": 86,
+      "orderPaidCents": 770310,
+      "paymentsSumCents": 770310,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6172
+    },
+    "2026-10-28": {
+      "orderCount": 86,
+      "orderPaidCents": 765558,
+      "paymentsSumCents": 765558,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6131
+    },
+    "2026-10-29": {
+      "orderCount": 86,
+      "orderPaidCents": 760428,
+      "paymentsSumCents": 760428,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 6120
+    },
+    "2026-10-30": {
+      "orderCount": 112,
+      "orderPaidCents": 997218,
+      "paymentsSumCents": 997218,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8041
+    },
+    "2026-10-31": {
+      "orderCount": 112,
+      "orderPaidCents": 999486,
+      "paymentsSumCents": 999486,
+      "deltaCents": 0,
+      "reconciled": true,
+      "eventCount": 8066
+    }
+  }
+}

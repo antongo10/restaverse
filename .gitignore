@@ -1,0 +1,48 @@
+# Dependencies & virtual environments
+node_modules
+node_modules/
+**/node_modules
+**/node_modules/
+venv
+venv/
+**/venv
+**/venv/
+.venv/
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Build outputs
+frontend/dist/
+dist/
+
+# Environment variables & local secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+# OS & editor files
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+
+# Large deterministic simulation outputs (regenerated via `python3 scripts/build_month_simulation_db.py`)
+data/mongodb/simulationEvents.json
+data/mongodb/orders.json
+data/mongodb/contentionLog.json
+data/mongodb/dishInstances.json
+data/mongodb/inventoryMovements.json
+data/mongodb/stockUnits.json
+data/mongodb/reservations.json
+data/mongodb/payments.json
+
+# Legacy SQL dump outputs & logs
+lumiere/out/
+lumiere/logs/
+
+# External starter reference repo
+homedesign-base/
