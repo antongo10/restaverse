@@ -63,10 +63,7 @@ export default function StreetScene3D() {
   const stopProvenanceTrace = useSimulationStore((s) => s.stopProvenanceTrace);
   const timestampMs = useSimulationStore((s) => s.timestampMs);
   const setTimestampMs = useSimulationStore((s) => s.setTimestampMs);
-  const isPlaying = useSimulationStore((s) => s.isPlaying);
   const playbackSpeed = useSimulationStore((s) => s.playbackSpeed);
-  const togglePlay = useSimulationStore((s) => s.togglePlay);
-  const setPlaybackSpeed = useSimulationStore((s) => s.setPlaybackSpeed);
 
   const [hoveredLabel, setHoveredLabel] = useState(null);
   const [walkMode, setWalkMode] = useState(false);
@@ -1209,9 +1206,9 @@ export default function StreetScene3D() {
           }`}
           title="Toggle first-person street-level walking mode"
         >
-          <span>{walkMode ? "🚶 Walking Mode Active (1.7m Eye-Level)" : "🚶 Walk Mode (WASD)"}</span>
+          <span>{walkMode ? "Walking · eye level" : "Walk mode"}</span>
         </button>
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/85 border border-slate-800 text-[11px] text-slate-300 backdrop-blur">
+        <div className={`${walkMode ? "flex" : "hidden"} items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/85 border border-slate-800 text-[11px] text-slate-300 backdrop-blur`}>
           <kbd className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-sky-300 font-mono">W A S D</kbd>
           <span>Move</span>
           <span className="text-slate-600">•</span>
@@ -1263,44 +1260,14 @@ export default function StreetScene3D() {
               )}
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
-              {[
-                { label: "⏪ -5x", speed: -180 },
-                { label: "⏪ -1x", speed: -60 },
-                { label: isPlaying ? "⏸" : "▶️", toggle: true },
-                { label: "⏩ 1x", speed: 60 },
-                { label: "⏩ 5x", speed: 180 },
-              ].map((btn, i) =>
-                btn.toggle ? (
-                  <button
-                    key={i}
-                    onClick={togglePlay}
-                    className="px-2 py-1 rounded-lg text-[11px] font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition"
-                  >
-                    {btn.label}
-                  </button>
-                ) : (
-                  <button
-                    key={i}
-                    onClick={() => setPlaybackSpeed(btn.speed)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold border transition ${
-                      isPlaying && playbackSpeed === btn.speed
-                        ? "bg-sky-500 text-slate-950 border-sky-300"
-                        : "bg-slate-900 text-slate-300 border-slate-700 hover:border-amber-400/60"
-                    }`}
-                  >
-                    {btn.label}
-                  </button>
-                )
-              )}
-              <button
-                onClick={stopProvenanceTrace}
-                className="ml-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-950/90 hover:bg-red-900 text-red-200 border border-red-700/70 transition"
-                title="Stop Provenance Playback"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={stopProvenanceTrace}
+              className="shrink-0 h-7 px-2.5 rounded-lg text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 transition"
+              title="Close the trace (use the timeline below to play, pause or change speed)"
+            >
+              Close trace
+            </button>
           </div>
 
           {/* Lineage Stage Stepper */}
@@ -1352,13 +1319,19 @@ export default function StreetScene3D() {
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 flex flex-wrap items-center gap-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl px-3.5 py-2 text-[11px] text-slate-300 backdrop-blur">
-        <span className="font-semibold text-slate-100 mr-1">3D Gastronomy Street:</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Available / Ready at Pass</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Seated / Order Queued</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Entrée / Mise en Place</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Active Cooking / Main Course</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Dessert / Chef & Manager</span>
+      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[10px] text-slate-400 backdrop-blur pointer-events-none">
+        {[
+          ["bg-emerald-500", "Free / ready at pass"],
+          ["bg-blue-500", "Seated / ordered"],
+          ["bg-amber-500", "Starters"],
+          ["bg-orange-500", "Cooking / mains"],
+          ["bg-purple-500", "Dessert"],
+        ].map(([color, label]) => (
+          <span key={label} className="flex items-center gap-1">
+            <span className={`w-2 h-2 rounded-full ${color}`} />
+            {label}
+          </span>
+        ))}
       </div>
     </div>
   );

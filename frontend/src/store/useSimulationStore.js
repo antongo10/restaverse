@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { parisDateOf, parisTimeMs, serviceDayWindow } from "../lib/parisTime";
 
 const API_BASE = "";
 
@@ -203,12 +204,13 @@ function samplePolylineAt(points, tNorm) {
  */
 function ensureProvenanceCatalog(bootstrap, dayBundle) {
   const events = dayBundle?.events || [];
-  const baseMs =
-    events[0]?.eventTimeMs ||
-    Date.parse(`${dayBundle?.serviceDate || "2025-06-14"}T08:00:00+02:00`);
-  const lunchMs = Date.parse(`${dayBundle?.serviceDate || "2025-06-14"}T12:18:00+02:00`);
+  const fallbackDate = dayBundle?.serviceDate || parisDateOf(Date.now());
+  const baseMs = events[0]?.eventTimeMs || parisTimeMs(fallbackDate, 8, 0);
+  const lunchMs = parisTimeMs(fallbackDate, 12, 18);
+  // Bundles from the live feed can legitimately be empty early in the day; never fake them.
+  const fromFeed = dayBundle?.releasedUntilMs != null;
 
-  let rawStockUnits = Array.isArray(dayBundle?.stockUnits) && dayBundle.stockUnits.length > 0
+  let rawStockUnits = Array.isArray(dayBundle?.stockUnits) && (dayBundle.stockUnits.length > 0 || fromFeed)
     ? dayBundle.stockUnits
     : null;
 
@@ -773,7 +775,7 @@ function ensureProvenanceCatalog(bootstrap, dayBundle) {
     ];
   }
 
-  let rawDishInstances = Array.isArray(dayBundle?.dishInstances) && dayBundle.dishInstances.length > 0
+  let rawDishInstances = Array.isArray(dayBundle?.dishInstances) && (dayBundle.dishInstances.length > 0 || fromFeed)
     ? dayBundle.dishInstances
     : null;
 
@@ -3677,17 +3679,64 @@ export function projectStreetStateAt(bootstrap, dayBundle, timestampMs) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Live feed plumbing. October 2026 is pre-simulated; the backend only releases what
+// has happened by the wall clock, in 15-second batches. The live view plays one
+// batch behind real time at 1x, so the batch it is showing has always arrived.
+// ---------------------------------------------------------------------------
+const BUNDLE_ARRAYS = ["events", "orders", "payments", "dishInstances", "inventoryMovements", "contentionLog"];
+const RECENT_BATCH_LIMIT = 12;
+const recentBatches = [];
+let liveSource = null;
+let dayLoadSeq = 0;
+
+function appendBatchDay(bundle, day) {
+  const next = { ...bundle };
+  let changed = false;
+  for (const key of BUNDLE_ARRAYS) {
+    const incoming = day[key] || [];
+    if (incoming.length === 0) continue;
+    const existing = bundle[key] || [];
+    const seen = new Set(existing.map((d) => d._id));
+    const fresh = incoming.filter((d) => !seen.has(d._id));
+    if (fresh.length === 0) continue;
+    next[key] = existing.concat(fresh);
+    changed = true;
+  }
+  if (day.calendarDay) next.daySummary = { ...(bundle.daySummary || {}), ...day.calendarDay };
+  return changed ? next : bundle;
+}
+
+function liveDisplayMs(feed) {
+  if (!feed?.releasedUntilMs) return 0;
+  const lagged = Date.now() + (feed.clockOffsetMs || 0) - (feed.batchSeconds || 15) * 1000;
+  return Math.min(feed.releasedUntilMs, lagged);
+}
+
+/** Last instant of `serviceDate` that can be viewed (released data only). */
+function viewableUntilMs(state) {
+  const { serviceDate, dayStartMs, dayEndMs, feed } = state;
+  if (!feed?.liveDate || serviceDate < feed.liveDate) return dayEndMs;
+  if (serviceDate > feed.liveDate) return dayStartMs;
+  return Math.max(dayStartMs, Math.min(dayEndMs, feed.releasedUntilMs));
+}
+
+const initialDay = parisDateOf(Date.now());
+
 export const useSimulationStore = create((set, get) => ({
   loading: true,
   error: null,
   bootstrap: null,
   dayBundle: null,
-  serviceDate: "2025-06-14",
-  timestampMs: Date.parse("2025-06-14T12:47:35+02:00"),
-  dayStartMs: Date.parse("2025-06-14T07:00:00+02:00"),
-  dayEndMs: Date.parse("2025-06-14T23:30:00+02:00"),
+  serviceDate: initialDay,
+  timestampMs: Date.now(),
+  ...serviceDayWindow(initialDay),
   isPlaying: false,
-  playbackSpeed: 60, // positive = forward, negative = reverse playback
+  playbackSpeed: 1, // sim seconds per real second; negative = reverse playback
+  followLive: false, // true = clock pinned to the live feed at 1x
+  month: null, // { dates, liveStartDate, batchSeconds }
+  monthCalendar: [], // [{ date, segment: historic|live, state: complete|live|upcoming, revenueCents, covers, orderCount, byBusiness }]
+  feed: { releasedUntilMs: 0, clockOffsetMs: 0, batchSeconds: 15, liveDate: null, connected: false, lastBatchToMs: 0 },
   viewMode: "3d", // "3d" | "2d" | "architecture"
   cameraPreset: "street_overview", // "street_overview" | "isometric" | "bistrot" | "osteria" | "sakana" | "kitchen" | "follow_agent"
   cutawayWalls: true,
@@ -3701,65 +3750,186 @@ export const useSimulationStore = create((set, get) => ({
   initPlatform: async () => {
     set({ loading: true, error: null });
     try {
-      const [bootRes, bundleRes] = await Promise.all([
-        fetch(`${API_BASE}/api/bootstrap`),
-        fetch(`${API_BASE}/api/simulation/day-bundle?date=2025-06-14`),
-      ]);
+      const bootRes = await fetch(`${API_BASE}/api/bootstrap`);
       const bootstrap = await bootRes.json();
-      const dayBundle = await bundleRes.json();
-      const initialTs = Date.parse("2025-06-14T12:47:35+02:00");
-      const projectedState = projectStreetStateAt(bootstrap, dayBundle, initialTs);
-
+      const session = bootstrap.simulationSession || {};
+      const status = bootstrap.liveFeed || {};
       set({
-        loading: false,
         bootstrap,
-        dayBundle,
-        serviceDate: "2025-06-14",
-        timestampMs: initialTs,
-        dayStartMs: Date.parse("2025-06-14T07:00:00+02:00"),
-        dayEndMs: Date.parse("2025-06-14T23:30:00+02:00"),
-        projectedState,
+        month: {
+          dates: session.availableDates || [],
+          liveStartDate: session.liveFeed?.startDate || status.startDate,
+          batchSeconds: status.batchSeconds || 15,
+        },
+        monthCalendar: bootstrap.monthCalendar || [],
+        feed: {
+          ...get().feed,
+          releasedUntilMs: status.releasedUntilMs,
+          clockOffsetMs: (status.serverNowMs || Date.now()) - Date.now(),
+          batchSeconds: status.batchSeconds || 15,
+          liveDate: status.liveDate,
+        },
       });
-      get().selectSceneObject("scene-bl-table-bl-t5");
+      get().connectLiveFeed();
+      await get().setServiceDate(status.liveDate, { follow: true });
     } catch (err) {
       set({ loading: false, error: err.message || "Failed to initialize platform" });
     }
   },
 
-  setServiceDate: async (newDate) => {
-    set({ loading: true, isPlaying: false, provenanceTrace: null });
+  connectLiveFeed: () => {
+    if (liveSource || typeof EventSource === "undefined") return;
+    liveSource = new EventSource(`${API_BASE}/api/live/stream`);
+
+    liveSource.addEventListener("hello", (msg) => {
+      const status = JSON.parse(msg.data);
+      const { feed, dayBundle, serviceDate, timestampMs, followLive } = get();
+      const missedBatches = feed.lastBatchToMs && status.releasedUntilMs > feed.lastBatchToMs;
+      set({
+        feed: {
+          ...feed,
+          connected: true,
+          releasedUntilMs: status.releasedUntilMs,
+          clockOffsetMs: status.serverNowMs - Date.now(),
+          liveDate: status.liveDate,
+          lastBatchToMs: status.releasedUntilMs,
+        },
+      });
+      // Reconnected after a gap: reload the live day so nothing in between is lost.
+      if (missedBatches && dayBundle?.serviceDate === status.liveDate) {
+        get().setServiceDate(serviceDate, { timestampMs, follow: followLive });
+      }
+    });
+
+    liveSource.addEventListener("batch", (msg) => {
+      const batch = JSON.parse(msg.data);
+      recentBatches.push(batch);
+      if (recentBatches.length > RECENT_BATCH_LIMIT) recentBatches.shift();
+
+      const { feed, dayBundle, monthCalendar } = get();
+      const dayChanged = batch.liveDate !== feed.liveDate;
+      let nextBundle = dayBundle;
+      const calendarUpdates = {};
+      for (const day of batch.days || []) {
+        if (day.calendarDay) calendarUpdates[day.serviceDate] = day.calendarDay;
+        if (nextBundle && nextBundle.serviceDate === day.serviceDate) nextBundle = appendBatchDay(nextBundle, day);
+      }
+      set({
+        dayBundle: nextBundle,
+        monthCalendar: monthCalendar.map((c) => {
+          if (calendarUpdates[c.date]) return calendarUpdates[c.date];
+          if (dayChanged && c.date < batch.liveDate) return { ...c, state: "complete" };
+          if (dayChanged && c.date === batch.liveDate) return { ...c, state: "live" };
+          return c;
+        }),
+        feed: {
+          ...feed,
+          releasedUntilMs: batch.toMs,
+          clockOffsetMs: batch.serverNowMs - Date.now(),
+          liveDate: batch.liveDate,
+          lastBatchToMs: batch.toMs,
+        },
+      });
+    });
+
+    liveSource.onerror = () => set({ feed: { ...get().feed, connected: false } });
+  },
+
+  /**
+   * Loads a service date. Options: `timestampMs` to land on, `follow` to pin the clock to
+   * the live feed (only on the live date), `resume` to keep playing after the load.
+   */
+  setServiceDate: async (newDate, opts = {}) => {
+    const { month, feed } = get();
+    if (!newDate || (month?.dates?.length && !month.dates.includes(newDate))) return;
+    if (feed.liveDate && newDate > feed.liveDate) return; // not happened yet
+    const loadId = ++dayLoadSeq;
+    const wasPlaying = get().isPlaying;
+    set({ loading: true, isPlaying: false, followLive: false, provenanceTrace: null });
     try {
       const res = await fetch(`${API_BASE}/api/simulation/day-bundle?date=${encodeURIComponent(newDate)}`);
-      const dayBundle = await res.json();
-      const newTs = Date.parse(`${newDate}T12:47:35+02:00`);
-      const projectedState = projectStreetStateAt(get().bootstrap, dayBundle, newTs);
+      let dayBundle = await res.json();
+      if (loadId !== dayLoadSeq) return; // a newer load superseded this one
+
+      // Batches that streamed in while the bundle was in flight
+      for (const batch of recentBatches) {
+        if (dayBundle.releasedUntilMs != null && batch.toMs <= dayBundle.releasedUntilMs) continue;
+        for (const day of batch.days || []) {
+          if (day.serviceDate === newDate) dayBundle = appendBatchDay(dayBundle, day);
+        }
+      }
+
+      const dayWindow = serviceDayWindow(newDate);
+      const follow = Boolean(opts.follow) && newDate === get().feed.liveDate;
+      const maxMs = viewableUntilMs({ ...get(), serviceDate: newDate, ...dayWindow });
+      const wantedMs = follow
+        ? liveDisplayMs(get().feed)
+        : opts.timestampMs ?? parisTimeMs(newDate, 12, 45);
+      const timestampMs = Math.max(dayWindow.dayStartMs, Math.min(maxMs, wantedMs));
+
       set({
         loading: false,
         serviceDate: newDate,
         dayBundle,
-        timestampMs: newTs,
-        dayStartMs: Date.parse(`${newDate}T07:00:00+02:00`),
-        dayEndMs: Date.parse(`${newDate}T23:30:00+02:00`),
-        projectedState,
+        timestampMs,
+        ...dayWindow,
+        followLive: follow,
+        isPlaying: follow || (Boolean(opts.resume) && wasPlaying),
+        playbackSpeed: follow ? 1 : get().playbackSpeed,
+        projectedState: projectStreetStateAt(get().bootstrap, dayBundle, timestampMs),
       });
       if (get().selectedSceneObjectId) {
         get().selectSceneObject(get().selectedSceneObjectId);
       }
     } catch (err) {
-      set({ loading: false, error: err.message });
+      if (loadId === dayLoadSeq) set({ loading: false, error: err.message });
     }
   },
 
   setTimestampMs: (nextMs) => {
-    const { dayStartMs, dayEndMs, bootstrap, dayBundle } = get();
-    const clamped = Math.max(dayStartMs, Math.min(dayEndMs, nextMs));
-    const projectedState = projectStreetStateAt(bootstrap, dayBundle, clamped);
-    set({ timestampMs: clamped, projectedState });
+    const state = get();
+    const clamped = Math.max(state.dayStartMs, Math.min(viewableUntilMs(state), nextMs));
+    const projectedState = projectStreetStateAt(state.bootstrap, state.dayBundle, clamped);
+    set({ timestampMs: clamped, projectedState, followLive: false });
+  },
+
+  /** Jump to the live edge and follow it at 1x. */
+  goLive: () => {
+    const { feed, serviceDate, bootstrap, dayBundle } = get();
+    if (!feed.liveDate) return;
+    if (serviceDate !== feed.liveDate) {
+      get().setServiceDate(feed.liveDate, { follow: true });
+      return;
+    }
+    const timestampMs = liveDisplayMs(feed);
+    set({
+      followLive: true,
+      isPlaying: true,
+      playbackSpeed: 1,
+      provenanceTrace: null,
+      timestampMs,
+      projectedState: projectStreetStateAt(bootstrap, dayBundle, timestampMs),
+    });
   },
 
   tickSimulation: (deltaRealSeconds) => {
-    const { isPlaying, playbackSpeed, timestampMs, dayStartMs, dayEndMs, bootstrap, dayBundle, provenanceTrace } = get();
-    if (!isPlaying) return;
+    const state = get();
+    const { isPlaying, playbackSpeed, timestampMs, dayStartMs, dayEndMs, bootstrap, dayBundle, provenanceTrace, feed, month } = state;
+    if (!isPlaying || state.loading) return;
+
+    if (state.followLive) {
+      const liveMs = liveDisplayMs(feed);
+      const liveDate = parisDateOf(liveMs);
+      if (liveDate !== state.serviceDate && month?.dates?.includes(liveDate)) {
+        get().setServiceDate(liveDate, { follow: true });
+        return;
+      }
+      if (liveMs <= timestampMs) return; // waiting for the next 15-second batch
+      const clamped = Math.min(liveMs, dayEndMs);
+      set({ timestampMs: clamped, projectedState: projectStreetStateAt(bootstrap, dayBundle, clamped) });
+      return;
+    }
+
     let nextMs = timestampMs + deltaRealSeconds * playbackSpeed * 1000;
 
     // If an active provenance trace has a bounded window, pause cleanly when reaching the start/end of the trace
@@ -3778,7 +3948,20 @@ export const useSimulationStore = create((set, get) => ({
       }
     }
 
+    // Caught up with the live edge: hand the clock over to the live feed.
+    if (playbackSpeed > 0 && state.serviceDate === feed.liveDate && nextMs >= liveDisplayMs(feed)) {
+      get().goLive();
+      return;
+    }
+
     if (nextMs >= dayEndMs) {
+      // Roll over into the next day of the month when replaying forward.
+      const dates = month?.dates || [];
+      const nextDate = dates[dates.indexOf(state.serviceDate) + 1];
+      if (playbackSpeed > 0 && nextDate && (!feed.liveDate || nextDate <= feed.liveDate)) {
+        get().setServiceDate(nextDate, { timestampMs: serviceDayWindow(nextDate).dayStartMs, resume: true });
+        return;
+      }
       nextMs = dayEndMs;
       set({ isPlaying: false });
     } else if (nextMs <= dayStartMs) {
@@ -3804,8 +3987,9 @@ export const useSimulationStore = create((set, get) => ({
     set({ timestampMs: nextMs, projectedState, followedAgentId: nextFollowed });
   },
 
-  togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
-  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed, isPlaying: true }),
+  togglePlay: () =>
+    set((s) => (s.isPlaying ? { isPlaying: false, followLive: false } : { isPlaying: true })),
+  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed, isPlaying: true, followLive: false }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setCameraPreset: (preset) => set({ cameraPreset: preset }),
   toggleCutawayWalls: () => set((s) => ({ cutawayWalls: !s.cutawayWalls })),
@@ -3826,7 +4010,7 @@ export const useSimulationStore = create((set, get) => ({
       get().dayStartMs,
       (dish.prepStartedAtMs || stages[1]?.timestampMs || deliveredMs - 15 * 60000) - 60000
     );
-    const startJumpMs = Math.min(get().dayEndMs, deliveredMs);
+    const startJumpMs = Math.min(viewableUntilMs(get()), deliveredMs);
     const nextProjected = projectStreetStateAt(bootstrap, dayBundle, startJumpMs);
 
     set({
@@ -3835,6 +4019,7 @@ export const useSimulationStore = create((set, get) => ({
       selectedSceneObjectId: dish.sceneObjectId || `scene-dish-${dish.dishInstanceId}`,
       playbackSpeed: -60,
       isPlaying: true,
+      followLive: false,
       followedAgentId: dish.waiterAgentId || dish.cookAgentId || null,
       cameraPreset: dish.waiterAgentId || dish.cookAgentId ? "follow_agent" : get().cameraPreset,
       provenanceTrace: {
@@ -3892,6 +4077,7 @@ export const useSimulationStore = create((set, get) => ({
       selectedSceneObjectId: unit.sceneObjectId || `scene-unit-${unit.unitId}`,
       playbackSpeed: 60,
       isPlaying: true,
+      followLive: false,
       followedAgentId: history[0]?.actorAgentId || history[0]?.cookId || null,
       provenanceTrace: {
         mode: "INGREDIENT_FORWARD",
@@ -3901,7 +4087,7 @@ export const useSimulationStore = create((set, get) => ({
         subtitle: `Étagère Niveau ${unit.shelfTier} (${unit.initialQty}${unit.unit}) → Prélèvements Cuisiniers / Barman → Assiettes Servies`,
         stages,
         startTimeMs: jumpMs,
-        endTimeMs: Math.min(get().dayEndMs, lastUseMs),
+        endTimeMs: Math.min(viewableUntilMs(get()), lastUseMs),
       },
     });
   },
@@ -3919,7 +4105,7 @@ export const useSimulationStore = create((set, get) => ({
     const firstUseMs = history[0]?.takenAtMs || history[0]?.timestampMs || timestampMs - 15 * 60000;
     const lastUseMs =
       (history[history.length - 1]?.returnedAtMs || history[history.length - 1]?.timestampMs || timestampMs) + 60000;
-    const jumpMs = Math.min(get().dayEndMs, Math.max(timestampMs, lastUseMs));
+    const jumpMs = Math.min(viewableUntilMs(get()), Math.max(timestampMs, lastUseMs));
     const nextProjected = projectStreetStateAt(bootstrap, dayBundle, jumpMs);
 
     const stages = [
@@ -3947,6 +4133,7 @@ export const useSimulationStore = create((set, get) => ({
       selectedSceneObjectId: unit.sceneObjectId || `scene-unit-${unit.unitId}`,
       playbackSpeed: -60,
       isPlaying: true,
+      followLive: false,
       followedAgentId: history[history.length - 1]?.actorAgentId || null,
       provenanceTrace: {
         mode: "INGREDIENT_REVERSE",
@@ -3962,7 +4149,7 @@ export const useSimulationStore = create((set, get) => ({
   },
 
   stopProvenanceTrace: () => {
-    set({ provenanceTrace: null, isPlaying: false, playbackSpeed: 60 });
+    set({ provenanceTrace: null, isPlaying: false, playbackSpeed: 1 });
   },
 
   jumpToRelativeEvent: (direction = 1) => {

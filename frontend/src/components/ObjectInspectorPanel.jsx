@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useSimulationStore } from "../store/useSimulationStore";
+import { parisHourOf } from "../lib/parisTime";
 import { VISUAL_ASSET_META } from "./assets/CulinaryAssets3D";
 
 const PROVENANCE_STYLES = {
@@ -278,7 +279,7 @@ export default function ObjectInspectorPanel() {
       .map((chk) => {
         const openedMs = Date.parse(chk.openedAt) || projectedState.timestampMs;
         const closedMs = chk.closedAt ? Date.parse(chk.closedAt) : openedMs + 55 * 60000;
-        const hr = new Date(openedMs).getHours();
+        const hr = parisHourOf(openedMs);
         const servicePeriod = hr < 16 ? "DÉJEUNER" : "DÎNER";
         const linesSum = chk.lines.reduce((s, l) => s + (l.lineTotalCents || 0), 0);
         const totalCents = chk.paidCents > 0 ? chk.paidCents : linesSum > 0 ? linesSum : chk.covers * 4200;
